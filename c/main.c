@@ -18,7 +18,9 @@
 
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 450;
-const float RADIUS = 50.0f;
+const float ASTEROID_LARGE_RADIUS = 50.0f;
+const float ASTEROID_MEDIUM_RADIUS = 25.0f;
+const float ASTEROID_SMALL_RADIUS = 8.0f;
 const float SPEED = 150.0f;
 const float ROT_SPEED = 5.0f;
 const float ASTEROID_SPEED_MIN = 80.0f;
@@ -34,13 +36,18 @@ const float BULLET_VELOCITY = 200.0f;
 
 #define STARTING_ASTEROIDS 4
 #define MAX_ASTEROIDS 64
-#define MAX_BULLETS 10
+#define MAX_BULLETS 256
 
 typedef enum {
     ASTEROID_LARGE, ASTEROID_MEDIUM, ASTEROID_SMALL
 } AsteroidSize;
 
 typedef enum { GAME_OVER, GAME_PLAYING } GameState;
+
+typedef struct {
+    Vector2 p0;
+    Vector2 p1;
+} Line;
 
 typedef struct {
     Vector2 pos;
@@ -81,6 +88,18 @@ Vector2 WrapPosition(Vector2 pos) {
     return pos;
 }
 
+float AsteroidRadius(Asteroid *a) {
+    if (a->size == ASTEROID_LARGE) {
+        return ASTEROID_LARGE_RADIUS;
+    } else if (a->size == ASTEROID_MEDIUM) {
+        return ASTEROID_MEDIUM_RADIUS;
+    } else if (a->size == ASTEROID_SMALL) {
+        return ASTEROID_SMALL_RADIUS;
+    }
+
+    return 0;
+}
+
 bool ShipCollided(Game *g) {
     float shipRadius = SHIP_HEIGHT / 2.0f;
 
@@ -92,13 +111,58 @@ bool ShipCollided(Game *g) {
             g->ship.pos,
             shipRadius,
             a->pos,
-            RADIUS
+            AsteroidRadius(a)
         )) {
             return true;
         }
     }
 
     return false;
+}
+
+Line BulletLine(Bullet *b) {
+    Vector2 direction =
+        Vector2Rotate((Vector2){ 0.0f, -1.0f }, b->rot);
+
+    Vector2 p0 = b->pos;
+    Vector2 p1 = Vector2Add(
+        b->pos,
+        Vector2Scale(direction, 8.0f)
+    );
+
+    return (Line){ p0, p1 };
+}
+
+void HandleBulletCollision(Game *g) {
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        Bullet *b = &g->bullets[i];
+        if (!b->active) continue;
+        Line l = BulletLine(b);
+
+        for (int j = 0; j < MAX_ASTEROIDS; j++) {
+            Asteroid *a = &g->asteroids[j];
+            if (!a->active) continue;
+
+            float radius = AsteroidRadius(a);
+            if (CheckCollisionCircleLine(a->pos, radius, l.p0, l.p1)) {
+                b->active = false;
+
+                switch (a->size) {
+                    case ASTEROID_LARGE:
+                        a->size = ASTEROID_MEDIUM;
+                        break;
+
+                    case ASTEROID_MEDIUM:
+                        a->size = ASTEROID_SMALL;
+                        break;
+
+                    case ASTEROID_SMALL:
+                        a->active = false;
+                        break;
+                }
+            }
+        }
+    }
 }
 
 void Fire(Game *g) {
@@ -129,6 +193,7 @@ void Update(Game *g) {
         }
     } else if (g->state == GAME_PLAYING) {
         if (IsKeyPressed(KEY_SPACE)) {
+            DEBUG_LOG("Fired!");
             Fire(g);
         }
     }
@@ -181,9 +246,11 @@ void Update(Game *g) {
         b->pos = Vector2Add(b->pos, Vector2Scale(b->velocity, dt));
     }
 
-    if (ShipCollided(g)) {
-        g->state = GAME_OVER;
-    }
+    HandleBulletCollision(g);
+
+    // if (ShipCollided(g)) {
+    //     g->state = GAME_OVER;
+    // }
 }
 
 Vector2 Rotate(Vector2 point, Vector2 center, float angle) {
@@ -214,16 +281,8 @@ void DrawTail(Game *g) {
 }
 
 void DrawBullet(Bullet *b) {
-    Vector2 direction =
-        Vector2Rotate((Vector2){ 0.0f, -1.0f }, b->rot);
-
-    Vector2 p0 = b->pos;
-    Vector2 p1 = Vector2Add(
-        b->pos,
-        Vector2Scale(direction, 8.0f)
-    );
-
-    DrawLineV(p0, p1, BLACK);
+    Line line = BulletLine(b);
+    DrawLineV(line.p0, line.p1, BLACK);
 }
 
 void DrawShip(Game *g) {
@@ -236,10 +295,10 @@ void DrawShip(Game *g) {
     py1 = Rotate(py1, g->ship.pos, g->ship.rot);
     py2 = Rotate(py2, g->ship.pos, g->ship.rot);
 
-    DEBUG_LOG(
-        // "Ship: pos=(%.2f, %.2f)", g->ship.pos.x, g->ship.pos.y
-        "Ship: velocity=(%.2f, %.2f)", g->ship.velocity.x, g->ship.velocity.y
-    );
+    // DEBUG_LOG(
+    //     // "Ship: pos=(%.2f, %.2f)", g->ship.pos.x, g->ship.pos.y
+    //     "Ship: velocity=(%.2f, %.2f)", g->ship.velocity.x, g->ship.velocity.y
+    // );
 
     DrawLineV(px1, py1, BLACK);
     DrawLineV(py1, py2, BLACK);
@@ -277,7 +336,7 @@ void Draw(Game *g) {
         DrawCircleLines(
             (int)a->pos.x, 
             (int)a->pos.y, 
-            RADIUS, 
+            AsteroidRadius(a), 
             BLUE
         );
     }
@@ -286,7 +345,7 @@ void Draw(Game *g) {
         Bullet *b = &g->bullets[i];
         if (!b->active) continue;
 
-        DEBUG_LOG("Bullet %d pos=(%.2f, %.2f)", i, b->pos.x, b->pos.y);
+        // DEBUG_LOG("Bullet %d pos=(%.2f, %.2f)", i, b->pos.x, b->pos.y);
         DrawBullet(b);
     }
 
@@ -336,14 +395,14 @@ void DebugAsteroids(Game *g) {
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
         Asteroid *a = &g->asteroids[i];
         if (!a->active) break;
-        DEBUG_LOG(
-            "Asteroid %d: pos=(%.2f, %.2f), velocity=(%.2f, %.2f)",
-            i,
-            a->pos.x,
-            a->pos.y,
-            a->velocity.x,
-            a->velocity.y
-        );
+        // DEBUG_LOG(
+        //     "Asteroid %d: pos=(%.2f, %.2f), velocity=(%.2f, %.2f)",
+        //     i,
+        //     a->pos.x,
+        //     a->pos.y,
+        //     a->velocity.x,
+        //     a->velocity.y
+        // );
     }
 }
 
