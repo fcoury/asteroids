@@ -20,8 +20,11 @@ const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 450;
 const float RADIUS = 50.0f;
 const float SPEED = 150.0f;
-const float ASTEROID_SPEED_MIN=80.0f;
-const float ASTEROID_SPEED_MAX=180.0f;
+const float ROT_SPEED = 5.0f;
+const float ASTEROID_SPEED_MIN = 80.0f;
+const float ASTEROID_SPEED_MAX = 180.0f;
+const float SHIP_HEIGHT = 30.0f;
+const float SHIP_WIDTH = 15.0f;
 
 #endif
 
@@ -35,14 +38,21 @@ typedef enum {
 typedef struct {
     Vector2 pos;
     Vector2 velocity;
-    float rotation;
-    float rotationSpeed;
+    float rot;
+    float rotSpeed;
     AsteroidSize size;
     bool active;
 } Asteroid;
 
 typedef struct {
+    Vector2 pos;
+    float rot;
+    Vector2 velocity;
+} Ship;
+
+typedef struct {
     Asteroid asteroids[MAX_ASTEROIDS];
+    Ship ship;
     int wave;
 } Game;
 
@@ -58,18 +68,68 @@ Vector2 WrapPosition(Vector2 pos) {
 void Update(Game *g) {
     float dt = GetFrameTime();
 
+    Vector2 forward = Vector2Rotate((Vector2){ 0.0f, -1.0f }, g->ship.rot);
+
+    if (IsKeyDown(KEY_LEFT)) {
+        g->ship.rot -= ROT_SPEED * dt;
+    }
+
+    if (IsKeyDown(KEY_RIGHT)) {
+        g->ship.rot += ROT_SPEED * dt;
+    }
+
+    if (IsKeyDown(KEY_UP)) {
+        g->ship.pos.x += forward.x * SPEED * dt;
+        g->ship.pos.y += forward.y * SPEED * dt;
+    }
+
+    if (IsKeyDown(KEY_DOWN)) {
+        g->ship.pos.x -= forward.x * SPEED * dt;
+        g->ship.pos.y -= forward.y * SPEED * dt;
+    }
+
+    g->ship.pos = WrapPosition(g->ship.pos);
+
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
         Asteroid *a = &g->asteroids[i];
         if (!a->active) continue;
         a->pos = Vector2Add(a->pos, Vector2Scale(a->velocity, dt));
         a->pos = WrapPosition(a->pos);
-        a->rotation = a->rotationSpeed * dt;
+        a->rot = a->rotSpeed * dt;
     }
+}
+
+Vector2 Rotate(Vector2 point, Vector2 center, float angle) {
+    Vector2 relative = Vector2Subtract(point, center);
+    relative = Vector2Rotate(relative, angle);
+
+    return Vector2Add(center, relative);
+}
+
+void DrawShip(Game *g) {
+    // center point above the ship - top of the triangle
+    Vector2 px1 = { g->ship.pos.x, g->ship.pos.y - (SHIP_HEIGHT / 2.0f) };
+    Vector2 py1 = { g->ship.pos.x - (SHIP_WIDTH / 2.0f), g->ship.pos.y + (SHIP_HEIGHT / 2.0f) };
+    Vector2 py2 = { g->ship.pos.x + (SHIP_WIDTH / 2.0f), g->ship.pos.y + (SHIP_HEIGHT / 2.0f) };
+
+    px1 = Rotate(px1, g->ship.pos, g->ship.rot);
+    py1 = Rotate(py1, g->ship.pos, g->ship.rot);
+    py2 = Rotate(py2, g->ship.pos, g->ship.rot);
+
+    DEBUG_LOG(
+        "Ship: pos=(%.2f, %.2f)", g->ship.pos.x, g->ship.pos.y
+    );
+
+    DrawLineV(px1, py1, BLACK);
+    DrawLineV(py1, py2, BLACK);
+    DrawLineV(py2, px1, BLACK);
 }
 
 void Draw(Game *g) {
     BeginDrawing();
     ClearBackground(RAYWHITE);
+
+    DrawShip(g);
 
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
         Asteroid *a = &g->asteroids[i];
@@ -100,8 +160,8 @@ void SpawnAsteroid(Game *g, Vector2 pos, AsteroidSize size) {
                 .pos = pos,
                 .size = size,
                 .velocity = (Vector2) { cosf(angle) * speed, sinf(angle) * speed },
-                .rotation = RandFloat(0.0f, PI * 2.0f),
-                .rotationSpeed = RandFloat(-2.0f, 2.0f),
+                .rot = RandFloat(0.0f, PI * 2.0f),
+                .rotSpeed = RandFloat(-2.0f, 2.0f),
                 .active = true,
             };
             return;
@@ -144,9 +204,16 @@ int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "My raylib window");
     SetTargetFPS(60);
 
+    Ship s = {
+        .pos = { SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f },
+        .rot = 0,
+        .velocity = 0,
+    };
+
     Game g = { 
         .asteroids = { 0 },
         .wave = 1,
+        .ship = s,
     };
 
     SpawnWave(&g);
