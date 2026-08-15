@@ -38,6 +38,8 @@ typedef enum {
     ASTEROID_LARGE, ASTEROID_MEDIUM, ASTEROID_SMALL
 } AsteroidSize;
 
+typedef enum { GAME_OVER, GAME_PLAYING } GameState;
+
 typedef struct {
     Vector2 pos;
     Vector2 velocity;
@@ -57,6 +59,7 @@ typedef struct {
     Asteroid asteroids[MAX_ASTEROIDS];
     Ship ship;
     int wave;
+    GameState state;
 } Game;
 
 Vector2 WrapPosition(Vector2 pos) {
@@ -68,10 +71,36 @@ Vector2 WrapPosition(Vector2 pos) {
     return pos;
 }
 
+bool ShipCollided(Game *g) {
+    float shipRadius = SHIP_HEIGHT / 2.0f;
+
+    for (int i = 0; i < MAX_ASTEROIDS; i++) {
+        Asteroid *a = &g->asteroids[i];
+        if (!a->active) continue;
+
+        if (CheckCollisionCircles(
+            g->ship.pos,
+            shipRadius,
+            a->pos,
+            RADIUS
+        )) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void Update(Game *g) {
     float dt = GetFrameTime();
 
     Vector2 forward = Vector2Rotate((Vector2){ 0.0f, -1.0f }, g->ship.rot);
+
+    if (IsKeyDown(KEY_SPACE)) {
+        if (g->state == GAME_OVER) {
+            g->state = GAME_PLAYING;
+        }
+    }
 
     if (IsKeyDown(KEY_LEFT)) {
         g->ship.rot -= ROT_SPEED * dt;
@@ -113,6 +142,10 @@ void Update(Game *g) {
         a->pos = Vector2Add(a->pos, Vector2Scale(a->velocity, dt));
         a->pos = WrapPosition(a->pos);
         a->rot = a->rotSpeed * dt;
+    }
+
+    if (ShipCollided(g)) {
+        g->state = GAME_OVER;
     }
 }
 
@@ -164,11 +197,28 @@ void DrawShip(Game *g) {
     DrawTail(g);
 }
 
+void DrawTextCenter(const char* text, int y, int fontSize, Color color) {
+    int textWidth = MeasureText(text, fontSize);
+    DrawText(text, (SCREEN_WIDTH - textWidth) / 2, y, fontSize, color);
+}
+
 void Draw(Game *g) {
     BeginDrawing();
     ClearBackground(RAYWHITE);
 
-    DrawShip(g);
+
+    if (g->state == GAME_PLAYING) {
+        DrawShip(g);
+    } else {
+        int fontSize = 30;
+
+        DrawTextCenter(
+            "Game Over",
+            (SCREEN_HEIGHT - fontSize) / 2,
+            fontSize,
+            RED
+        );
+    }
 
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
         Asteroid *a = &g->asteroids[i];
