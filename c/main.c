@@ -34,7 +34,7 @@ const float BULLET_VELOCITY = 200.0f;
 
 #endif
 
-#define STARTING_ASTEROIDS 4
+#define STARTING_ASTEROIDS 1
 #define MAX_ASTEROIDS 64
 #define MAX_BULLETS 256
 
@@ -42,7 +42,7 @@ typedef enum {
     ASTEROID_LARGE, ASTEROID_MEDIUM, ASTEROID_SMALL
 } AsteroidSize;
 
-typedef enum { GAME_OVER, GAME_PLAYING } GameState;
+typedef enum { GAME_READY, GAME_OVER, GAME_PLAYING } GameState;
 
 typedef struct {
     Vector2 p0;
@@ -133,7 +133,56 @@ Line BulletLine(Bullet *b) {
     return (Line){ p0, p1 };
 }
 
+static float RandFloat(float min, float max) {
+    float t = (float)GetRandomValue(0, 1000000) / 1000000.0f;
+    return min + t * (max - min);
+}
+
+void SpawnAsteroid(Game *g, Vector2 pos, AsteroidSize size) {
+    for (int i = 0; i < MAX_ASTEROIDS; i++) {
+        if (!g->asteroids[i].active) {
+            float angle = RandFloat(0.0f, 2.0f * PI);
+            float speed = RandFloat(ASTEROID_SPEED_MIN, ASTEROID_SPEED_MAX);
+
+            g->asteroids[i] = (Asteroid) {
+                .pos = pos,
+                .size = size,
+                .velocity = (Vector2) { cosf(angle) * speed, sinf(angle) * speed },
+                .rot = RandFloat(0.0f, PI * 2.0f),
+                .rotSpeed = RandFloat(-2.0f, 2.0f),
+                .active = true,
+            };
+
+            return;
+        }
+    }
+}
+
+void SpawnAsteroidsFrom(Game *g, Asteroid *a, AsteroidSize newSize) {
+    a->active = false;
+    // void SpawnAsteroid(Game *g, Vector2 pos, AsteroidSize size) {
+    SpawnAsteroid(g, a->pos, newSize);
+    SpawnAsteroid(g, a->pos, newSize);
+}
+
+void SpawnWave(Game *g) {
+    int count = STARTING_ASTEROIDS * (g->wave);
+    for (int i = 0; i < count; i++) {
+        Vector2 pos;
+        if (rand() % 2 == 0) {
+            pos.x = (rand() % 2) ? 0.0f : (float) SCREEN_WIDTH;
+            pos.y = RandFloat(0.0f, (float) SCREEN_HEIGHT);
+        } else {
+            pos.x = RandFloat(0.0f, (float) SCREEN_WIDTH);
+            pos.y = (rand() % 2) ? 0.0f : (float) SCREEN_HEIGHT;
+        }
+        SpawnAsteroid(g, pos, ASTEROID_LARGE);
+    }
+}
+
 void HandleBulletCollision(Game *g) {
+    bool lastAsteroid = true;
+
     for (int i = 0; i < MAX_BULLETS; i++) {
         Bullet *b = &g->bullets[i];
         if (!b->active) continue;
@@ -143,17 +192,18 @@ void HandleBulletCollision(Game *g) {
             Asteroid *a = &g->asteroids[j];
             if (!a->active) continue;
 
+            lastAsteroid = false;
             float radius = AsteroidRadius(a);
             if (CheckCollisionCircleLine(a->pos, radius, l.p0, l.p1)) {
                 b->active = false;
 
                 switch (a->size) {
                     case ASTEROID_LARGE:
-                        a->size = ASTEROID_MEDIUM;
+                        SpawnAsteroidsFrom(g, a, ASTEROID_MEDIUM);
                         break;
 
                     case ASTEROID_MEDIUM:
-                        a->size = ASTEROID_SMALL;
+                        SpawnAsteroidsFrom(g, a, ASTEROID_SMALL);
                         break;
 
                     case ASTEROID_SMALL:
@@ -161,6 +211,12 @@ void HandleBulletCollision(Game *g) {
                         break;
                 }
             }
+        }
+
+        if (lastAsteroid) {
+            g->wave++;
+            g->state = GAME_READY;
+            SpawnWave(g);
         }
     }
 }
@@ -196,7 +252,13 @@ void Update(Game *g) {
             DEBUG_LOG("Fired!");
             Fire(g);
         }
+    } else if (g->state == GAME_READY) {
+        if (IsKeyPressed(KEY_SPACE)) {
+            g->state = GAME_PLAYING;
+        }
     }
+
+    if (g->state == GAME_READY) return;
 
     if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_H)) {
         g->ship.rot -= ROT_SPEED * dt;
@@ -248,9 +310,9 @@ void Update(Game *g) {
 
     HandleBulletCollision(g);
 
-    // if (ShipCollided(g)) {
-    //     g->state = GAME_OVER;
-    // }
+    if (ShipCollided(g)) {
+        g->state = GAME_OVER;
+    }
 }
 
 Vector2 Rotate(Vector2 point, Vector2 center, float angle) {
@@ -318,11 +380,11 @@ void Draw(Game *g) {
 
     if (g->state == GAME_PLAYING) {
         DrawShip(g);
-    } else {
+    } else if (g->state == GAME_OVER || g->state == GAME_READY) {
         int fontSize = 30;
 
         DrawTextCenter(
-            "Game Over",
+            g->state == GAME_OVER ? "Game Over" : "Ready!",
             (SCREEN_HEIGHT - fontSize) / 2,
             fontSize,
             RED
@@ -352,45 +414,6 @@ void Draw(Game *g) {
     EndDrawing();
 }
 
-static float RandFloat(float min, float max) {
-    float t = (float)GetRandomValue(0, 1000000) / 1000000.0f;
-    return min + t * (max - min);
-}
-
-void SpawnAsteroid(Game *g, Vector2 pos, AsteroidSize size) {
-    for (int i = 0; i < MAX_ASTEROIDS; i++) {
-        if (!g->asteroids[i].active) {
-            float angle = RandFloat(0.0f, 2.0f * PI);
-            float speed = RandFloat(ASTEROID_SPEED_MIN, ASTEROID_SPEED_MAX);
-
-            g->asteroids[i] = (Asteroid) {
-                .pos = pos,
-                .size = size,
-                .velocity = (Vector2) { cosf(angle) * speed, sinf(angle) * speed },
-                .rot = RandFloat(0.0f, PI * 2.0f),
-                .rotSpeed = RandFloat(-2.0f, 2.0f),
-                .active = true,
-            };
-            return;
-        }
-    }
-}
-
-void SpawnWave(Game *g) {
-    int count = STARTING_ASTEROIDS * (g->wave);
-    for (int i = 0; i < count; i++) {
-        Vector2 pos;
-        if (rand() % 2 == 0) {
-            pos.x = (rand() % 2) ? 0.0f : (float) SCREEN_WIDTH;
-            pos.y = RandFloat(0.0f, (float) SCREEN_HEIGHT);
-        } else {
-            pos.x = RandFloat(0.0f, (float) SCREEN_WIDTH);
-            pos.y = (rand() % 2) ? 0.0f : (float) SCREEN_HEIGHT;
-        }
-        SpawnAsteroid(g, pos, ASTEROID_LARGE);
-    }
-}
-
 void DebugAsteroids(Game *g) {
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
         Asteroid *a = &g->asteroids[i];
@@ -408,7 +431,7 @@ void DebugAsteroids(Game *g) {
 
 int main(void) {
     SetTraceLogLevel(LOG_DEBUG);
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "My raylib window");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Asteroids!");
     SetTargetFPS(60);
 
     Ship s = {
