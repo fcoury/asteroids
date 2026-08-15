@@ -5,7 +5,7 @@
 #include "raylib.h"
 #include "raymath.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 #ifdef DEBUG
 #define DEBUG_LOG(...) TraceLog(LOG_DEBUG, __VA_ARGS__)
@@ -25,6 +25,9 @@ const float ASTEROID_SPEED_MIN = 80.0f;
 const float ASTEROID_SPEED_MAX = 180.0f;
 const float SHIP_HEIGHT = 30.0f;
 const float SHIP_WIDTH = 15.0f;
+const float SHIP_ACCELERATION = 200.0f; // pixels per second squared
+const float SHIP_MAX_VELOCITY = 400.0f;
+const float DRAG = 0.5f;
 
 #endif
 
@@ -79,14 +82,28 @@ void Update(Game *g) {
     }
 
     if (IsKeyDown(KEY_UP)) {
-        g->ship.pos.x += forward.x * SPEED * dt;
-        g->ship.pos.y += forward.y * SPEED * dt;
+        Vector2 acceleration = Vector2Scale(forward, SHIP_ACCELERATION);
+        g->ship.velocity = Vector2Add(g->ship.velocity, Vector2Scale(acceleration, dt));
     }
 
     if (IsKeyDown(KEY_DOWN)) {
-        g->ship.pos.x -= forward.x * SPEED * dt;
-        g->ship.pos.y -= forward.y * SPEED * dt;
+        Vector2 acceleration = Vector2Scale(forward, -SHIP_ACCELERATION);
+        g->ship.velocity = Vector2Add(g->ship.velocity, Vector2Scale(acceleration, dt));
     }
+
+    g->ship.velocity = Vector2Scale(
+        g->ship.velocity,
+        expf(-DRAG * dt)
+    );
+
+    if (Vector2LengthSqr(g->ship.velocity) < 0.01f) {
+        g->ship.velocity = (Vector2){ 0.0f, 0.0f };
+    }
+
+    g->ship.pos = Vector2Add(
+        g->ship.pos,
+        Vector2Scale(g->ship.velocity, dt)
+    );
 
     g->ship.pos = WrapPosition(g->ship.pos);
 
@@ -106,6 +123,26 @@ Vector2 Rotate(Vector2 point, Vector2 center, float angle) {
     return Vector2Add(center, relative);
 }
 
+void DrawTail(Game *g) {
+    if (!IsKeyDown(KEY_UP)) return;
+
+    float width = 10.0f;
+    // float speed = Vector2Length(g->ship.velocity);
+    // float speedRatio = fminf(speed / SHIP_MAX_VELOCITY, 1.0f);
+    // float height = width * speedRatio;
+    float height = 5.0f;
+
+    Rectangle rec = { 
+        .x = g->ship.pos.x, 
+        .y = g->ship.pos.y, 
+        .width = width,
+        .height = height,
+    };
+
+    Vector2 origin = { width / 2.0f, -SHIP_HEIGHT / 2.0f };
+    DrawRectanglePro(rec, origin, g->ship.rot * RAD2DEG, BLACK);
+}
+
 void DrawShip(Game *g) {
     // center point above the ship - top of the triangle
     Vector2 px1 = { g->ship.pos.x, g->ship.pos.y - (SHIP_HEIGHT / 2.0f) };
@@ -117,12 +154,14 @@ void DrawShip(Game *g) {
     py2 = Rotate(py2, g->ship.pos, g->ship.rot);
 
     DEBUG_LOG(
-        "Ship: pos=(%.2f, %.2f)", g->ship.pos.x, g->ship.pos.y
+        // "Ship: pos=(%.2f, %.2f)", g->ship.pos.x, g->ship.pos.y
+        "Ship: velocity=(%.2f, %.2f)", g->ship.velocity.x, g->ship.velocity.y
     );
 
     DrawLineV(px1, py1, BLACK);
     DrawLineV(py1, py2, BLACK);
     DrawLineV(py2, px1, BLACK);
+    DrawTail(g);
 }
 
 void Draw(Game *g) {
