@@ -46,9 +46,24 @@ void update(Game *game) {
         if (asteroids[i].pos.y - RADIUS > WIDTH) {
             asteroids[i].pos.y = -RADIUS;
         }
-
     }
+}
 
+void draw(Game *game) {
+    Asteroid *asteroids = game->asteroids;
+
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+
+    for (int i = 0; i < game->asteroidCount; i++) {
+        DrawCircleLines(
+            (int)asteroids[i].pos.x, 
+            (int)asteroids[i].pos.y, 
+            RADIUS, 
+            BLUE
+        );
+    }
+    EndDrawing();
 }
 
 int main(void) {
@@ -72,21 +87,7 @@ int main(void) {
 
     while (!WindowShouldClose()) {
         update(&game);
-
-        BeginDrawing();
-        ClearBackground(RAYWHITE);
-
-        for (int i = 0; i < asteroidCount; i++) {
-            DrawCircleLines(
-                (int)asteroids[i].pos.x, 
-                (int)asteroids[i].pos.y, 
-                RADIUS, 
-                BLUE
-            );
-        }
-
-        DrawText("Hello, raylib!", 300, 215, 20, DARKGRAY);
-        EndDrawing();
+        draw(&game);
     }
 
     CloseWindow();
