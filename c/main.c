@@ -28,17 +28,26 @@ const float SHIP_WIDTH = 15.0f;
 const float SHIP_ACCELERATION = 200.0f; // pixels per second squared
 const float SHIP_MAX_VELOCITY = 400.0f;
 const float DRAG = 0.5f;
+const float BULLET_VELOCITY = 200.0f;
 
 #endif
 
 #define STARTING_ASTEROIDS 4
 #define MAX_ASTEROIDS 64
+#define MAX_BULLETS 10
 
 typedef enum {
     ASTEROID_LARGE, ASTEROID_MEDIUM, ASTEROID_SMALL
 } AsteroidSize;
 
 typedef enum { GAME_OVER, GAME_PLAYING } GameState;
+
+typedef struct {
+    Vector2 pos;
+    float rot;
+    Vector2 velocity;
+    bool active;
+} Bullet;
 
 typedef struct {
     Vector2 pos;
@@ -57,6 +66,7 @@ typedef struct {
 
 typedef struct {
     Asteroid asteroids[MAX_ASTEROIDS];
+    Bullet bullets[MAX_BULLETS];
     Ship ship;
     int wave;
     GameState state;
@@ -91,14 +101,35 @@ bool ShipCollided(Game *g) {
     return false;
 }
 
+void Fire(Game *g) {
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        if (!g->bullets[i].active) {
+            Vector2 direction = Vector2Rotate((Vector2){ 0.0f, -1.0f }, g->ship.rot);
+
+            g->bullets[i] = (Bullet){
+                .pos = g->ship.pos,
+                .rot = g->ship.rot,
+                .velocity = Vector2Scale(direction, BULLET_VELOCITY),
+                .active = true,
+            };
+
+            return;
+        }
+    }
+}
+
 void Update(Game *g) {
     float dt = GetFrameTime();
 
     Vector2 forward = Vector2Rotate((Vector2){ 0.0f, -1.0f }, g->ship.rot);
 
-    if (IsKeyDown(KEY_SPACE)) {
-        if (g->state == GAME_OVER) {
+    if (g->state == GAME_OVER) {
+        if (IsKeyDown(KEY_SPACE)) {
             g->state = GAME_PLAYING;
+        }
+    } else if (g->state == GAME_PLAYING) {
+        if (IsKeyPressed(KEY_SPACE)) {
+            Fire(g);
         }
     }
 
@@ -144,6 +175,12 @@ void Update(Game *g) {
         a->rot = a->rotSpeed * dt;
     }
 
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        Bullet *b = &g->bullets[i];
+        if (!b->active) continue;
+        b->pos = Vector2Add(b->pos, Vector2Scale(b->velocity, dt));
+    }
+
     if (ShipCollided(g)) {
         g->state = GAME_OVER;
     }
@@ -174,6 +211,19 @@ void DrawTail(Game *g) {
 
     Vector2 origin = { width / 2.0f, -SHIP_HEIGHT / 2.0f };
     DrawRectanglePro(rec, origin, g->ship.rot * RAD2DEG, BLACK);
+}
+
+void DrawBullet(Bullet *b) {
+    Vector2 direction =
+        Vector2Rotate((Vector2){ 0.0f, -1.0f }, b->rot);
+
+    Vector2 p0 = b->pos;
+    Vector2 p1 = Vector2Add(
+        b->pos,
+        Vector2Scale(direction, 8.0f)
+    );
+
+    DrawLineV(p0, p1, BLACK);
 }
 
 void DrawShip(Game *g) {
@@ -231,6 +281,15 @@ void Draw(Game *g) {
             BLUE
         );
     }
+
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        Bullet *b = &g->bullets[i];
+        if (!b->active) continue;
+
+        DEBUG_LOG("Bullet %d pos=(%.2f, %.2f)", i, b->pos.x, b->pos.y);
+        DrawBullet(b);
+    }
+
     EndDrawing();
 }
 
@@ -301,6 +360,7 @@ int main(void) {
 
     Game g = { 
         .asteroids = { 0 },
+        .bullets = { 0 },
         .wave = 1,
         .ship = s,
     };
