@@ -9,51 +9,69 @@
 #define DEBUG_LOG(...) ((void)0)
 #endif
 
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
+
+const int WIDTH = 800;
+const int HEIGHT = 450;
+const float RADIUS = 50.0f;
+const float SPEED = 150.0f;
+
+#endif
+
 typedef struct {
     Vector2 pos;
     Vector2 velocity;
 } Asteroid;
 
-int main(void) {
-    const int screenWidth = 800;
-    const int screenHeight = 450;
-    const float radius = 50.0f;
-    const float speed = 150.0f;
+typedef struct {
+    Asteroid *asteroids;
+    int asteroidCount;
+} Game;
 
+void update(Game *game) {
+    float deltaTime = GetFrameTime();
+    Asteroid *asteroids = game->asteroids;
+
+    for (int i = 0; i < game->asteroidCount; i++) {
+        asteroids[i].pos.x += asteroids[i].velocity.x * deltaTime;
+        asteroids[i].pos.y += asteroids[i].velocity.y * deltaTime;
+
+        DEBUG_LOG("Circle %d: x=%.1f y=%.1f", i, asteroids[i].pos.x, asteroids[i].pos.y);
+
+        if (asteroids[i].pos.x - RADIUS > WIDTH) {
+            asteroids[i].pos.x = -RADIUS;
+        }
+
+        if (asteroids[i].pos.y - RADIUS > WIDTH) {
+            asteroids[i].pos.y = -RADIUS;
+        }
+
+    }
+
+}
+
+int main(void) {
     SetTraceLogLevel(LOG_DEBUG);
-    InitWindow(screenWidth, screenHeight, "My raylib window");
+    InitWindow(WIDTH, HEIGHT, "My raylib window");
     SetTargetFPS(60);
 
     Asteroid asteroids[] = {
-        { .pos = { 0.0f,        0.0f         }, .velocity = { speed,  speed }  },
-        { .pos = { screenWidth, 0.0f,        }, .velocity = { -speed, speed }  },
-        { .pos = { 0.0f,        screenHeight }, .velocity = { speed,  -speed } },
-        { .pos = { screenWidth, screenHeight }, .velocity = { -speed, -speed } },
+        { .pos = { 0.0f,  0.0f   }, .velocity = { SPEED,  SPEED }  },
+        { .pos = { WIDTH, 0.0f   }, .velocity = { -SPEED, SPEED }  },
+        { .pos = { 0.0f,  HEIGHT }, .velocity = { SPEED,  -SPEED } },
+        { .pos = { WIDTH, HEIGHT }, .velocity = { -SPEED, -SPEED } },
     };
 
     const int asteroidCount = sizeof(asteroids) / sizeof(asteroids[0]);
+
+    Game game = { asteroids, asteroidCount };
 
     float x = 0;
     float y = 0;
 
     while (!WindowShouldClose()) {
-        float deltaTime = GetFrameTime();
-
-        for (int i = 0; i < asteroidCount; i++) {
-            asteroids[i].pos.x += asteroids[i].velocity.x * deltaTime;
-            asteroids[i].pos.y += asteroids[i].velocity.y * deltaTime;
-
-            DEBUG_LOG("Circle %d: x=%.1f y=%.1f", i, asteroids[i].pos.x, asteroids[i].pos.y);
-
-            if (asteroids[i].pos.x - radius > screenWidth) {
-                asteroids[i].pos.x = -radius;
-            }
-    
-            if (asteroids[i].pos.y - radius > screenWidth) {
-                asteroids[i].pos.y = -radius;
-            }
-
-        }
+        update(&game);
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
@@ -62,7 +80,7 @@ int main(void) {
             DrawCircleLines(
                 (int)asteroids[i].pos.x, 
                 (int)asteroids[i].pos.y, 
-                radius, 
+                RADIUS, 
                 BLUE
             );
         }
