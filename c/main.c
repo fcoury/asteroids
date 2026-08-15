@@ -50,7 +50,7 @@ Vector2 WrapPosition(Vector2 pos) {
     if (pos.x < 0) pos.x += SCREEN_WIDTH;
     if (pos.x > SCREEN_WIDTH) pos.x -= SCREEN_WIDTH;
     if (pos.y < 0) pos.y += SCREEN_HEIGHT;
-    if (pos.y > SCREEN_WIDTH) pos.y -= SCREEN_HEIGHT;
+    if (pos.y > SCREEN_HEIGHT) pos.y -= SCREEN_HEIGHT;
 
     return pos;
 }
