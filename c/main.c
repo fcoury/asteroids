@@ -198,20 +198,20 @@ void Update(Game *g) {
         }
     }
 
-    if (IsKeyDown(KEY_LEFT)) {
+    if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_H)) {
         g->ship.rot -= ROT_SPEED * dt;
     }
 
-    if (IsKeyDown(KEY_RIGHT)) {
+    if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_L)) {
         g->ship.rot += ROT_SPEED * dt;
     }
 
-    if (IsKeyDown(KEY_UP)) {
+    if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_K)) {
         Vector2 acceleration = Vector2Scale(forward, SHIP_ACCELERATION);
         g->ship.velocity = Vector2Add(g->ship.velocity, Vector2Scale(acceleration, dt));
     }
 
-    if (IsKeyDown(KEY_DOWN)) {
+    if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_J)) {
         Vector2 acceleration = Vector2Scale(forward, -SHIP_ACCELERATION);
         g->ship.velocity = Vector2Add(g->ship.velocity, Vector2Scale(acceleration, dt));
     }
@@ -261,7 +261,7 @@ Vector2 Rotate(Vector2 point, Vector2 center, float angle) {
 }
 
 void DrawTail(Game *g) {
-    if (!IsKeyDown(KEY_UP)) return;
+    if (!IsKeyDown(KEY_UP) && !IsKeyDown(KEY_K)) return;
 
     float width = 10.0f;
     // float speed = Vector2Length(g->ship.velocity);
