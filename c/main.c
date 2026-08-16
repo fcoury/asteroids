@@ -34,7 +34,7 @@ const float BULLET_VELOCITY = 200.0f;
 
 #endif
 
-#define STARTING_ASTEROIDS 1
+#define STARTING_ASTEROIDS 4
 #define MAX_ASTEROIDS 64
 #define MAX_BULLETS 256
 
@@ -166,7 +166,7 @@ void SpawnAsteroidsFrom(Game *g, Asteroid *a, AsteroidSize newSize) {
 }
 
 void SpawnWave(Game *g) {
-    int count = STARTING_ASTEROIDS * (g->wave);
+    int count = STARTING_ASTEROIDS + (g->wave - 1);
     for (int i = 0; i < count; i++) {
         Vector2 pos;
         if (rand() % 2 == 0) {
@@ -215,7 +215,7 @@ void HandleBulletCollision(Game *g) {
 
         if (lastAsteroid) {
             g->wave++;
-            g->state = GAME_READY;
+            // g->state = GAME_READY;
             SpawnWave(g);
         }
     }
@@ -238,23 +238,33 @@ void Fire(Game *g) {
     }
 }
 
+void ResetGame(Game *g) {
+    for (int i = 0; i < MAX_ASTEROIDS; i++) {
+        g->asteroids[i].active = false;
+    }
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        g->bullets[i].active = false;
+    }
+    g->wave = 1;
+    g->ship.pos = (Vector2){ SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f };
+    g->ship.rot = 0;
+    g->ship.velocity = (Vector2){ 0.0f, 0.0f };
+}
+
 void Update(Game *g) {
     float dt = GetFrameTime();
 
     Vector2 forward = Vector2Rotate((Vector2){ 0.0f, -1.0f }, g->ship.rot);
 
-    if (g->state == GAME_OVER) {
-        if (IsKeyDown(KEY_SPACE)) {
+    if (g->state == GAME_OVER || g->state == GAME_READY) {
+        if (IsKeyPressed(KEY_SPACE)) {
+            SpawnWave(g);
             g->state = GAME_PLAYING;
         }
     } else if (g->state == GAME_PLAYING) {
         if (IsKeyPressed(KEY_SPACE)) {
             DEBUG_LOG("Fired!");
             Fire(g);
-        }
-    } else if (g->state == GAME_READY) {
-        if (IsKeyPressed(KEY_SPACE)) {
-            g->state = GAME_PLAYING;
         }
     }
 
@@ -294,9 +304,12 @@ void Update(Game *g) {
 
     g->ship.pos = WrapPosition(g->ship.pos);
 
+    int totalAsteroids = 0;
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
         Asteroid *a = &g->asteroids[i];
         if (!a->active) continue;
+
+        totalAsteroids++;
         a->pos = Vector2Add(a->pos, Vector2Scale(a->velocity, dt));
         a->pos = WrapPosition(a->pos);
         a->rot = a->rotSpeed * dt;
@@ -305,12 +318,24 @@ void Update(Game *g) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         Bullet *b = &g->bullets[i];
         if (!b->active) continue;
+        
         b->pos = Vector2Add(b->pos, Vector2Scale(b->velocity, dt));
+
+        if (b->pos.x < 0.0f || b->pos.x > SCREEN_WIDTH ||
+            b->pos.y < 0.0f || b->pos.y > SCREEN_HEIGHT) {
+            b->active = false;
+        }
     }
 
     HandleBulletCollision(g);
 
+    if (g->state == GAME_PLAYING) {
+        const char* text = TextFormat("Wave %d - Left %d", g->wave, totalAsteroids);
+        DrawText(text, 10, 10, 20, BLACK);
+    }
+
     if (ShipCollided(g)) {
+        ResetGame(g);
         g->state = GAME_OVER;
     }
 }
@@ -384,10 +409,17 @@ void Draw(Game *g) {
         int fontSize = 30;
 
         DrawTextCenter(
-            g->state == GAME_OVER ? "Game Over" : "Ready!",
+            g->state == GAME_OVER ? "Game Over" : "Asteroidz",
             (SCREEN_HEIGHT - fontSize) / 2,
             fontSize,
             RED
+        );
+
+        DrawTextCenter(
+            "Press SPACE to start",
+            (SCREEN_HEIGHT - 20) - 10.0f,
+            20,
+            BLACK
         );
     }
 
@@ -414,41 +446,16 @@ void Draw(Game *g) {
     EndDrawing();
 }
 
-void DebugAsteroids(Game *g) {
-    for (int i = 0; i < MAX_ASTEROIDS; i++) {
-        Asteroid *a = &g->asteroids[i];
-        if (!a->active) break;
-        // DEBUG_LOG(
-        //     "Asteroid %d: pos=(%.2f, %.2f), velocity=(%.2f, %.2f)",
-        //     i,
-        //     a->pos.x,
-        //     a->pos.y,
-        //     a->velocity.x,
-        //     a->velocity.y
-        // );
-    }
-}
-
 int main(void) {
     SetTraceLogLevel(LOG_DEBUG);
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Asteroids!");
     SetTargetFPS(60);
 
-    Ship s = {
-        .pos = { SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f },
-        .rot = 0,
-        .velocity = 0,
-    };
+    Ship s = { 0 };
+    Game g = { 0 };
+    g.ship = s;
 
-    Game g = { 
-        .asteroids = { 0 },
-        .bullets = { 0 },
-        .wave = 1,
-        .ship = s,
-    };
-
-    SpawnWave(&g);
-    DebugAsteroids(&g);
+    ResetGame(&g);
 
     while (!WindowShouldClose()) {
         Update(&g);
