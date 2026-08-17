@@ -92,7 +92,7 @@ struct Game {
 impl Game {
     fn update(&mut self, d: &mut RaylibDrawHandle<'_>) {
         let dt = d.get_frame_time();
-        let forward = Vector2::new(self.ship.rot.cos(), self.ship.rot.sin());
+        let forward = Vector2::new(0., -1.).rotate(self.ship.rot);
 
         match self.state {
             GameState::GameOver | GameState::Ready if d.is_key_pressed(KeyboardKey::KEY_SPACE) => {
@@ -113,9 +113,14 @@ impl Game {
             self.ship.rot += ROT_SPEED * dt;
         }
 
-        if d.is_key_down(KeyboardKey::KEY_DOWN) || d.is_key_down(KeyboardKey::KEY_J) {
+        if d.is_key_down(KeyboardKey::KEY_UP) || d.is_key_down(KeyboardKey::KEY_K) {
             let acceleration = forward.scale(SHIP_ACCELERATION);
-            self.ship.velocity = self.ship.velocity + acceleration.scale(dt);
+            self.ship.velocity += acceleration.scale(dt);
+        }
+
+        if d.is_key_down(KeyboardKey::KEY_DOWN) || d.is_key_down(KeyboardKey::KEY_J) {
+            let acceleration = forward.scale(-SHIP_ACCELERATION);
+            self.ship.velocity += acceleration.scale(dt);
         }
 
         self.ship.velocity = self.ship.velocity.scale((-DRAG * dt).exp());
@@ -125,6 +130,7 @@ impl Game {
         }
 
         self.ship.pos += self.ship.velocity.scale(dt);
+        self.ship.pos = wrap_position(self.ship.pos);
 
         for a in self.asteroids.iter_mut().filter(|a| a.active) {
             println!("pos before: {:?}", a.pos);
@@ -245,6 +251,21 @@ impl Game {
             ship_rotated[2],
             Color::BLACK,
         );
+        self.draw_tail(d);
+    }
+
+    fn draw_tail(&self, d: &mut RaylibDrawHandle<'_>) {
+        if !d.is_key_down(KeyboardKey::KEY_UP) && !d.is_key_down(KeyboardKey::KEY_K) {
+            return;
+        }
+
+        let width: f32 = 10.;
+        let height: f32 = 5.;
+
+        let rec = Rectangle::new(self.ship.pos.x, self.ship.pos.y, width, height);
+
+        let origin = Vector2::new(width / 2., -SHIP_HEIGHT / 2.);
+        d.draw_rectangle_pro(rec, origin, self.ship.rot.to_degrees(), Color::BLACK);
     }
 }
 
